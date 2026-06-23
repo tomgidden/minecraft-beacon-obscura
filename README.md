@@ -21,13 +21,13 @@ Players connect with a completely unmodified vanilla client.
 Requires the correct [fabric-api jar](https://modrinth.com/mod/fabric-api) on
 the server.
 
-Copy `beacon-obscura-fabric-26.2.jar` to the server's `mods/` folder.
+Copy [`beacon-obscura-fabric-26.2.jar`](https://github.com/tomgidden/minecraft-beacon-obscura/releases) to the server's `mods/` folder.
 
 ### NeoForge servers
 
 Requires [NeoForge](https://neoforged.net/) on the server. No other mods needed.
 
-Copy `beacon-obscura-neoforge-26.2.jar` to the server's `mods/` folder.
+Copy [`beacon-obscura-neoforge-26.2.jar`](https://github.com/tomgidden/minecraft-beacon-obscura/releases) to the server's `mods/` folder.
 
 ## Usage
 
