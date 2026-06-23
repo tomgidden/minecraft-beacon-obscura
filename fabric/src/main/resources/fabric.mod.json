@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "beaconobscura",
+  "version": "${version}",
+  "name": "Beacon Obscura",
+  "description": "Place tinted glass above a beacon to hide the beam while preserving all effects, sounds, and pyramid mechanics. Server-side only.",
+  "authors": [
+    "_gid"
+  ],
+  "contact": {
+    "homepage": "https://github.com/tomgidden/minecraft-beacon-obscura",
+    "sources": "https://github.com/tomgidden/minecraft-beacon-obscura"
+  },
+  "icon": "icon.png",
+  "license": "MIT",
+  "environment": "server",
+  "mixins": [
+    "beaconobscura.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric-api": "*",
+    "minecraft": ">=26.1.2 <27",
+    "java": ">=25"
+  }
+}

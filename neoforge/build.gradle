@@ -1,0 +1,32 @@
+plugins {
+    id 'net.neoforged.moddev' version "${neoforge_moddev_version}"
+    id 'maven-publish'
+}
+
+base {
+    archivesName = "${project.archives_base_name}-neoforge"
+}
+
+neoForge {
+    version = project.neoforge_version
+    mods {
+        beaconobscura {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    implementation project(':common')
+}
+
+processResources {
+    def version = project.version
+    inputs.property "version", version
+    filesMatching("META-INF/neoforge.mods.toml") { expand "version": version }
+}
+
+jar {
+    from(project(':common').sourceSets.main.output)
+    from("../LICENSE.txt") { rename { "${it}_${project.archives_base_name}" } }
+}

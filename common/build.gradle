@@ -1,0 +1,18 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${fabric_loom_version}"
+}
+
+base {
+    archivesName = "${project.archives_base_name}-common"
+}
+
+loom {
+    mods {
+        "beaconobscura" { sourceSet sourceSets.main }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+}

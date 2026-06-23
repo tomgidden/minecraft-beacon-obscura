@@ -1,0 +1,21 @@
+# Build output
+build/
+*/build/
+
+# Gradle caches
+.gradle/
+*/.gradle/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Loom caches
+.loom-cache/
+
+# macOS
+.DS_Store

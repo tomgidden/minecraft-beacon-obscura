@@ -1,0 +1,34 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${fabric_loom_version}"
+    id 'maven-publish'
+}
+
+base {
+    archivesName = "${project.archives_base_name}-fabric"
+}
+
+loom {
+    mods {
+        "beaconobscura" { sourceSet sourceSets.main }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    // Pull in the shared mixin source
+    implementation project(':common')
+}
+
+processResources {
+    def version = project.version
+    inputs.property "version", version
+    filesMatching("fabric.mod.json") { expand "version": version }
+}
+
+jar {
+    from(project(':common').sourceSets.main.output)
+    from("../LICENSE.txt") { rename { "${it}_${project.archives_base_name}" } }
+}
