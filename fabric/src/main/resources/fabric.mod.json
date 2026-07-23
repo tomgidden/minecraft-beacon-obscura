@@ -13,7 +13,6 @@
   },
   "icon": "icon.png",
   "license": "MIT",
-  "environment": "server",
   "mixins": [
     "beaconobscura.mixins.json"
   ],
