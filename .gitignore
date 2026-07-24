@@ -1,22 +1,29 @@
-# Build output
-build/
-*/build/
-*/bin/
-
-# Gradle caches
-.gradle/
-*/.gradle/
-
-# IDE
-.idea/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
 *.iml
-.vscode/
+*.ipr
+*.iws
+*.log
+*/.gradle/
+*/bin/
+*/build/
+.DS_Store
 .classpath
+.gradle/
+.gradletasknamecache
+.idea/
+.loom-cache/
 .project
 .settings/
-
-# Loom caches
-.loom-cache/
-
-# macOS
-.DS_Store
+.vscode/
+bin/
+build/
+dev/
+gradle-app.setting
+net/
+out/
+run-*/
+run/
+runs/
+tests/__pycache__
+tests/config.py
