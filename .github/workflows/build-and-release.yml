@@ -1,3 +1,13 @@
+# This workflow is intentionally identical across all of tomgidden's Minecraft
+# mods (for now). Everything that differs between mods lives in .github/release/:
+#
+#   release.env   -- mod name, jar basename, release channel, project ids
+#   RELEASE.md    -- body of the GitHub release
+#   CHANGELOG.md  -- changelog sent to Modrinth and CurseForge
+#
+# To change what a release says, edit those files -- not this one. Any edit
+# here should be copied to the other repos so they stay in sync.
+
 name: Build and Release
 
 on:
@@ -11,6 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
 
     steps:
       - name: Checkout
@@ -25,21 +38,100 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # NeoForge's NFRT toolchain (downloaded/decompiled/patched Minecraft) and
+      # Loom's own cache are expensive to rebuild but only change when the
+      # pinned MC/loader/NeoForge versions do -- not on every source change --
+      # so they're cached separately from setup-gradle's build-cache, keyed on
+      # gradle.properties rather than the whole repo.
+      - name: Cache NeoForge/Loom toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/neoformruntime
+            ~/.gradle/caches/fabric-loom
+            .gradle/loom-cache
+          key: toolchains-${{ runner.os }}-${{ hashFiles('gradle.properties') }}
+          restore-keys: |
+            toolchains-${{ runner.os }}-
+
+      # release.env is plain KEY=value, so it can be appended straight to the
+      # step environment. VERSION comes from the tag; on a workflow_dispatch
+      # (no tag) it falls back to mod_version out of gradle.properties, so a
+      # manual run still builds and names its artifacts correctly.
+      - name: Load release config
+        id: cfg
+        run: |
+          cat .github/release/release.env >> "$GITHUB_ENV"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "VERSION=${{ github.ref_name }}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=$(sed -n 's/^mod_version=//p' gradle.properties)" >> "$GITHUB_ENV"
+          fi
+
       - name: Build
         run: ./gradlew :fabric:build :neoforge:build
+
+      # The release body and changelog are templates containing ${VERSION};
+      # envsubst is restricted to that one variable so any other $... in the
+      # prose (or a stray backtick-free shell-looking string) is left alone.
+      - name: Render release text
+        run: |
+          envsubst '${VERSION}' < .github/release/RELEASE.md > "$RUNNER_TEMP/release-body.md"
+          envsubst '${VERSION}' < .github/release/CHANGELOG.md > "$RUNNER_TEMP/changelog.md"
+          {
+            echo "FABRIC_JAR=fabric/build/libs/${ARTIFACT}-fabric-${VERSION}.jar"
+            echo "NEOFORGE_JAR=neoforge/build/libs/${ARTIFACT}-neoforge-${VERSION}.jar"
+          } >> "$GITHUB_ENV"
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          name: Beacon Obscura ${{ github.ref_name }}
-          body: |
-            **Minecraft 26.1.2 – 26.2 | Fabric and NeoForge**
-
-            Place tinted glass above a beacon to hide the beam while keeping all effects active. Server-side only — no client mod required.
-
-            - `beacon-obscura-fabric-${{ github.ref_name }}.jar` — Fabric (requires Fabric API)
-            - `beacon-obscura-neoforge-${{ github.ref_name }}.jar` — NeoForge
+          name: ${{ env.MOD_NAME }} ${{ env.VERSION }}
+          body_path: ${{ runner.temp }}/release-body.md
           files: |
-            fabric/build/libs/beacon-obscura-fabric-${{ github.ref_name }}.jar
-            neoforge/build/libs/beacon-obscura-neoforge-${{ github.ref_name }}.jar
+            ${{ env.FABRIC_JAR }}
+            ${{ env.NEOFORGE_JAR }}
           fail_on_unmatched_files: true
+          prerelease: ${{ env.PRERELEASE == 'true' }}
+
+      # Loaders, game versions and dependencies are read out of the jars'
+      # own metadata (fabric.mod.json / neoforge.mods.toml), so there is
+      # nothing to keep in step here when the MC version moves.
+      #
+      # Skipped unless MODRINTH_TOKEN is set, so a fork or a local
+      # workflow_dispatch still builds and makes a GitHub release.
+      - name: Publish to Modrinth
+        if: ${{ env.MODRINTH_TOKEN != '' }}
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ vars.MODRINTH_ID }}
+          modrinth-token: ${{ env.MODRINTH_TOKEN }}
+          files: |
+            ${{ env.FABRIC_JAR }}
+            ${{ env.NEOFORGE_JAR }}
+          name: ${{ env.MOD_NAME }} ${{ env.VERSION }}
+          version: ${{ env.VERSION }}
+          version-type: ${{ env.VERSION_TYPE }}
+          changelog-file: ${{ runner.temp }}/changelog.md
+
+      # CurseForge is fussier than Modrinth about game versions: it will not
+      # accept a version string it doesn't already know, and inference from
+      # jar metadata can produce ranges it rejects. GAME_VERSIONS in
+      # release.env overrides that inference when set; left empty, mc-publish
+      # infers as it does for Modrinth.
+      #
+      # Skipped unless CURSEFORGE_TOKEN is set, as above.
+      - name: Publish to CurseForge
+        if: ${{ env.CURSEFORGE_TOKEN != '' }}
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          curseforge-id: ${{ vars.CURSEFORGE_ID }}
+          curseforge-token: ${{ env.CURSEFORGE_TOKEN }}
+          files: |
+            ${{ env.FABRIC_JAR }}
+            ${{ env.NEOFORGE_JAR }}
+          name: ${{ env.MOD_NAME }} ${{ env.VERSION }}
+          version: ${{ env.VERSION }}
+          version-type: ${{ env.VERSION_TYPE }}
+          game-versions: ${{ env.GAME_VERSIONS }}
+          changelog-file: ${{ runner.temp }}/changelog.md

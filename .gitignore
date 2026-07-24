@@ -1,6 +1,7 @@
 # Build output
 build/
 */build/
+*/bin/
 
 # Gradle caches
 .gradle/
