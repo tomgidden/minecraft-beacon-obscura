@@ -15,18 +15,94 @@
 # Build and release are separate jobs. release-github/-modrinth/-curseforge
 # each depend only on build's jars (via upload/download-artifact), not on each
 # other, so if e.g. Modrinth publishing fails, use GitHub's "Re-run failed
-# jobs" to retry just that job -- the build isn't repeated.
+# jobs" to retry just that job -- the build isn't repeated. (Re-running an old
+# run replays that run's workflow file, not the current one, so a fix to this
+# file needs a new run to take effect.)
+#
+# What runs depends on how the workflow was triggered, and on the tag's shape.
+# Every tag builds; the tag name decides only what gets published:
+#
+#   26.3.0            public release   GitHub release + Modrinth + CurseForge
+#   26.3.0-pre1       github prerelease  GitHub release only, marked prerelease
+#   workflow-update-* anything else    build only, nothing published
+#
+#   manual dispatch   build + a prerelease GitHub release; Modrinth and
+#                     CurseForge only if their box is ticked
+#
+# so an untagged run, or a tag that isn't a version number, is safe to use as
+# a test build: it publishes nothing to the mod sites unless asked.
 
 name: Build and Release
 
 on:
   workflow_dispatch:
+    inputs:
+      modrinth:
+        description: 'Also publish to Modrinth'
+        type: boolean
+        default: false
+      curseforge:
+        description: 'Also publish to CurseForge'
+        type: boolean
+        default: false
   push:
     tags:
-      - '[0-9]*'
+      - '*'
 
 jobs:
+  # Decides what this run is allowed to publish, so the release jobs can stay
+  # simple `if:` checks. GitHub's `on.push.tags` filter takes globs, not
+  # regexes, and expressions have no regex operator either, so the version
+  # shape is matched here in bash instead -- and every tag is built, whatever
+  # it's called.
+  #
+  #   release    a plain version, e.g. 26.3.0 -- publish everywhere
+  #   prerelease a version with a suffix, e.g. 26.3.0-pre1 -- GitHub only,
+  #              flagged as a prerelease
+  #   (neither)  any other tag, e.g. workflow-update-26.3.0 -- build only
+  #
+  # A manual dispatch counts as a prerelease, so a test build never looks
+  # like a real one.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      github: ${{ steps.g.outputs.github }}
+      modrinth: ${{ steps.g.outputs.modrinth }}
+      curseforge: ${{ steps.g.outputs.curseforge }}
+      prerelease: ${{ steps.g.outputs.prerelease }}
+    steps:
+      - id: g
+        env:
+          IS_TAG: ${{ github.ref_type == 'tag' }}
+          TAG: ${{ github.ref_name }}
+          WANT_MODRINTH: ${{ inputs.modrinth }}
+          WANT_CURSEFORGE: ${{ inputs.curseforge }}
+        run: |
+          gh=false; mr=false; cf=false; pre=false
+
+          if [ "$IS_TAG" = "true" ]; then
+            if printf '%s' "$TAG" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+              gh=true; mr=true; cf=true            # public release
+            elif printf '%s' "$TAG" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?-[A-Za-z0-9_]+$'; then
+              gh=true; pre=true                    # github prerelease
+            fi                                     # else: build only
+          else
+            gh=true; pre=true                      # manual dispatch
+            [ "$WANT_MODRINTH" = "true" ] && mr=true
+            [ "$WANT_CURSEFORGE" = "true" ] && cf=true
+          fi
+
+          {
+            echo "github=$gh"
+            echo "modrinth=$mr"
+            echo "curseforge=$cf"
+            echo "prerelease=$pre"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice::tag='${TAG}' -> github=$gh modrinth=$mr curseforge=$cf prerelease=$pre"
+
   build:
+    needs: gate
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version-out.outputs.version }}
@@ -62,18 +138,24 @@ jobs:
             toolchains-${{ runner.os }}-
 
       # release.env is plain KEY=value, so it can be appended straight to the
-      # step environment. VERSION comes from the tag; on a workflow_dispatch
-      # (no tag) it falls back to mod_version out of gradle.properties, so a
-      # manual run still builds and names its artifacts correctly.
+      # step environment.
+      #
+      # VERSION comes from the tag, but only when the tag is actually a version
+      # (gate said it was publishable). A tag like workflow-update-26.3.0 is a
+      # marker, not a version, and naming jars after it would produce
+      # beacon-obscura-fabric-workflow-update-26.3.0.jar; those runs fall back
+      # to mod_version from gradle.properties, as a manual dispatch does.
       #
       # The set of loaders is derived from the repo layout: a loader is built
       # only if its subproject directory exists. GRADLE_TARGETS is the list of
       # build tasks; HAS_FABRIC/HAS_NEOFORGE gate the later per-loader steps.
       - name: Load release config
         id: cfg
+        env:
+          TAG_IS_VERSION: ${{ needs.gate.outputs.github }}
         run: |
           cat .github/release/release.env >> "$GITHUB_ENV"
-          if [ "${{ github.ref_type }}" = "tag" ]; then
+          if [ "${{ github.ref_type }}" = "tag" ] && [ "$TAG_IS_VERSION" = "true" ]; then
             echo "VERSION=${{ github.ref_name }}" >> "$GITHUB_ENV"
           else
             echo "VERSION=$(sed -n 's/^mod_version=//p' gradle.properties)" >> "$GITHUB_ENV"
@@ -92,8 +174,23 @@ jobs:
           fi
           echo "GRADLE_TARGETS=${targets# }" >> "$GITHUB_ENV"
 
+      # -Pmod_version overrides gradle.properties so that on a tag build the
+      # tag is the single source of truth for the version, and the jars are
+      # named after it whatever the file says. (Jar names have to match what
+      # the release jobs glob for; a silent mismatch there produces an empty
+      # file list rather than an error.) gradle.properties still supplies the
+      # default for untagged builds, and a warning is emitted if it has
+      # drifted, so the drift gets noticed without failing a release.
+      - name: Check version against tag
+        if: ${{ github.ref_type == 'tag' && needs.gate.outputs.github == 'true' }}
+        run: |
+          in_file=$(sed -n 's/^mod_version=//p' gradle.properties)
+          if [ "$in_file" != "$VERSION" ]; then
+            echo "::warning::gradle.properties has mod_version=$in_file but the tag is $VERSION; building as $VERSION."
+          fi
+
       - name: Build
-        run: ./gradlew $GRADLE_TARGETS
+        run: ./gradlew $GRADLE_TARGETS -Pmod_version="$VERSION"
 
       # Emitted as a job output (rather than left in $GITHUB_ENV) because env
       # vars set in one job aren't visible in another -- the release jobs need
@@ -133,8 +230,16 @@ jobs:
           done
           echo "loaders=$loaders" >> "$GITHUB_OUTPUT"
 
+  # Runs for a version tag (26.3.0 or 26.3.0-pre1) and for a manual dispatch,
+  # so a test build still leaves the jars somewhere downloadable -- but not for
+  # a non-version tag, which builds and stops.
+  #
+  # Marked as a prerelease whenever gate said so (a -suffix tag, or a manual
+  # dispatch), so a test build can't be mistaken for a real one. On a plain
+  # version tag, PRERELEASE from release.env decides as usual.
   release-github:
-    needs: build
+    needs: [gate, build]
+    if: ${{ needs.gate.outputs.github == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -166,7 +271,7 @@ jobs:
           body_path: ${{ runner.temp }}/release-body.md
           files: release-files/*.jar
           fail_on_unmatched_files: true
-          prerelease: ${{ env.PRERELEASE == 'true' }}
+          prerelease: ${{ needs.gate.outputs.prerelease == 'true' || env.PRERELEASE == 'true' }}
 
   # mc-publish infers loaders/game-versions/dependencies from a single jar's
   # own metadata (fabric.mod.json / neoforge.mods.toml) per call, so a
@@ -175,10 +280,14 @@ jobs:
   # of the loaders build actually produced, publishing one Modrinth version
   # per loader (matching the existing 26.2-fabric / 26.2-neoforge versions).
   #
-  # Skipped unless MODRINTH_TOKEN is set, so a fork or a local
-  # workflow_dispatch still builds and makes a GitHub release.
+  # Only runs for a plain version tag (26.3.0 -- not 26.3.0-pre1), or when a
+  # manual run explicitly ticks the Modrinth box; the step is additionally
+  # skipped when MODRINTH_TOKEN is unset, so a fork still builds and makes a
+  # GitHub release. (The token check has to be at step level: `secrets` is not
+  # available to a job-level `if:`.)
   release-modrinth:
-    needs: build
+    needs: [gate, build]
+    if: ${{ needs.gate.outputs.modrinth == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -225,9 +334,11 @@ jobs:
   # call, so a multi-loader files list silently loses everything but one
   # loader's data.
   #
-  # Skipped unless CURSEFORGE_TOKEN is set, as above.
+  # Gated like release-modrinth: a plain version tag, or an explicitly ticked
+  # manual run.
   release-curseforge:
-    needs: build
+    needs: [gate, build]
+    if: ${{ needs.gate.outputs.curseforge == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
