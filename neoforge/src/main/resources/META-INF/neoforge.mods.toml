@@ -15,13 +15,13 @@ Place tinted glass above a beacon to hide the beam while preserving all effects,
 [[dependencies.beaconobscura]]
 modId = "neoforge"
 type = "required"
-versionRange = "[26.1.2,27)"
+versionRange = "[${neoforge_version_min},27)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.beaconobscura]]
 modId = "minecraft"
 type = "required"
-versionRange = "[26.1.2,27)"
+versionRange = "[${minecraft_version_min},27)"
 ordering = "NONE"
 side = "BOTH"

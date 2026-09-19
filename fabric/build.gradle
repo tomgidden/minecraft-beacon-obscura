@@ -1,6 +1,5 @@
 plugins {
     id 'net.fabricmc.fabric-loom' version "${fabric_loom_version}"
-    id 'maven-publish'
 }
 
 base {
@@ -22,9 +21,15 @@ dependencies {
 }
 
 processResources {
-    def version = project.version
-    inputs.property "version", version
-    filesMatching("fabric.mod.json") { expand "version": version }
+    def props = [
+        version: project.version,
+        mod_id: project.mod_id,
+        mod_name: project.mod_name,
+        minecraft_version_min: project.minecraft_version_min,
+        fabric_loader_version: project.fabric_loader_version
+    ]
+    inputs.properties props
+    filesMatching("fabric.mod.json") { expand props }
 }
 
 jar {

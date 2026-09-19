@@ -1,6 +1,5 @@
 plugins {
     id 'net.neoforged.moddev' version "${neoforge_moddev_version}"
-    id 'maven-publish'
 }
 
 base {
@@ -21,9 +20,15 @@ dependencies {
 }
 
 processResources {
-    def version = project.version
-    inputs.property "version", version
-    filesMatching("META-INF/neoforge.mods.toml") { expand "version": version }
+    def props = [
+        version: project.version,
+        mod_id: project.mod_id,
+        mod_name: project.mod_name,
+        minecraft_version_min: project.minecraft_version_min,
+        neoforge_version_min: project.neoforge_version_min
+    ]
+    inputs.properties props
+    filesMatching("META-INF/neoforge.mods.toml") { expand props }
 }
 
 jar {

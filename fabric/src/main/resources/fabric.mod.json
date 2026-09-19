@@ -17,8 +17,8 @@
     "beaconobscura.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.19.3",
-    "minecraft": ">=26.1.2 <27",
+    "fabricloader": ">=${fabric_loader_version}",
+    "minecraft": ">=${minecraft_version_min} <27",
     "java": ">=25"
   }
 }

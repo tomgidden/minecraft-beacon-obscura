@@ -1,5 +1,5 @@
 subprojects {
-    group = project.maven_group
+    group = project.mod_group
     version = project.mod_version
 
     plugins.withId('java') {
@@ -10,6 +10,7 @@ subprojects {
     }
 
     tasks.withType(JavaCompile).configureEach {
+        it.options.encoding = 'UTF-8'
         it.options.release = 25
     }
 }
