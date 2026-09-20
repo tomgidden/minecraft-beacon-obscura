@@ -3,7 +3,7 @@ plugins {
 }
 
 base {
-    archivesName = "${project.archives_base_name}-neoforge"
+    archivesName = "${project.archives_base}-neoforge"
 }
 
 neoForge {
@@ -33,5 +33,5 @@ processResources {
 
 jar {
     from(project(':common').sourceSets.main.output)
-    from("../LICENSE.txt") { rename { "${it}_${project.archives_base_name}" } }
+    from("../LICENSE.txt") { rename { "${it}_${project.archives_base}" } }
 }

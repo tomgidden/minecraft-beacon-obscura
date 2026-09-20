@@ -3,7 +3,7 @@ plugins {
 }
 
 base {
-    archivesName = "${project.archives_base_name}-fabric"
+    archivesName = "${project.archives_base}-fabric"
 }
 
 loom {
@@ -34,5 +34,5 @@ processResources {
 
 jar {
     from(project(':common').sourceSets.main.output)
-    from("../LICENSE.txt") { rename { "${it}_${project.archives_base_name}" } }
+    from("../LICENSE.txt") { rename { "${it}_${project.archives_base}" } }
 }
